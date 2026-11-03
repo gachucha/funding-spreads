@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Funding Spreads</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: one header with venue status, one control row, one sortable spread table. Summary first, detail after. */
+:root {
+  --bg: #eef0f1;
+  --panel: #ffffff;
+  --fg: #16201f;
+  --muted: #5d6b69;
+  --line: #d6dcdb;
+  --accent: #0b6b66;
+  --long: #0f766e;
+  --long-bg: #d9efec;
+  --short: #9a5b0a;
+  --short-bg: #f6e6cc;
+  --bad: #b3261e;
+  --good: #1b7f4b;
+  --font-ui: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-num: "Martian Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1514; --panel: #151e1d; --fg: #e3ecea; --muted: #8fa09d; --line: #26332f;
+    --accent: #52c2b8; --long: #5fd0c3; --long-bg: #12332f; --short: #e8b25c; --short-bg: #3a2c12;
+    --bad: #ff8a80; --good: #6fd39b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1514; --panel: #151e1d; --fg: #e3ecea; --muted: #8fa09d; --line: #26332f;
+  --accent: #52c2b8; --long: #5fd0c3; --long-bg: #12332f; --short: #e8b25c; --short-bg: #3a2c12;
+  --bad: #ff8a80; --good: #6fd39b; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg); font: 14px/1.5 var(--font-ui);
+  padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.sub { color: var(--muted); margin: 2px 0 0; max-width: 62ch; }
+header { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; align-items: flex-end; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; font-size: 12px; min-width: 0;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.chip.ok .dot { background: var(--good); }
+.chip.err .dot { background: var(--bad); }
+.chip b { font-weight: 600; }
+.chip span { color: var(--muted); font-family: var(--font-num); font-size: 11px; }
+.controls {
+  display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: end; padding: 12px 14px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+}
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field label, .legend-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+input[type="number"], input[type="search"] {
+  font: 13px var(--font-num); color: var(--fg); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; width: 120px;
+}
+input[type="search"] { font-family: var(--font-ui); width: 150px; }
+input:focus-visible, button:focus-visible, th[data-k]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.venues { display: flex; flex-wrap: wrap; gap: 6px 14px; padding-block: 6px; }
+.venues label { display: flex; align-items: center; gap: 6px; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--fg); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--muted); font-size: 12px; align-items: center; }
+.tag { padding: 1px 7px; border-radius: 4px; font-family: var(--font-num); font-size: 11px; }
+.tag.l { background: var(--long-bg); color: var(--long); }
+.tag.s { background: var(--short-bg); color: var(--short); }
+.tablebox { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; min-width: 860px; }
+th, td { padding: 9px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--panel); }
+th[data-k] { cursor: pointer; user-select: none; }
+th[data-k][aria-sort] { color: var(--fg); }
+th:first-child, td:first-child, th.txt, td.txt { text-align: left; }
+tbody tr:last-child td { border-bottom: 0; }
+td { font-family: var(--font-num); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+td.sym { font-family: var(--font-ui); font-weight: 600; font-size: 14px; }
+td.na { color: var(--muted); opacity: 0.5; }
+td.l { background: var(--long-bg); color: var(--long); }
+td.s { background: var(--short-bg); color: var(--short); }
+td.spread { font-weight: 500; color: var(--fg); }
+td.pair { font-family: var(--font-ui); font-size: 13px; }
+.empty { padding: 28px 16px; color: var(--muted); text-align: center; }
+.note { color: var(--muted); font-size: 12px; max-width: 80ch; margin: 0; }
+@media (prefers-reduced-motion: no-preference) { .dot { transition: background .3s; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Funding Spreads</h1>
+      <p class="sub">Perp funding on Sodex, Variational, TxFlow and Lighter, normalized to an hourly rate and annualized. Short the highest-funding venue, long the lowest, and collect the gap.</p>
+    </div>
+    <div class="chips" id="chips" aria-live="polite"></div>
+  </header>
+
+  <section class="controls" aria-label="Filters">
+    <div class="field"><label for="minApr">Min spread (APR %)</label><input id="minApr" type="number" min="0" step="1" value="10"></div>
+    <div class="field"><label for="cost">Round-trip cost (bps)</label><input id="cost" type="number" min="0" step="1" value="10"></div>
+    <div class="field"><label for="q">Symbol</label><input id="q" type="search" placeholder="BTC, ETH..." autocomplete="off"></div>
+    <div class="field"><span class="legend-title">Venues</span><div class="venues" id="venueBoxes"></div></div>
+  </section>
+
+  <div class="legend">
+    <span><span class="tag l">LONG</span> lowest funding, you pay least or get paid</span>
+    <span><span class="tag s">SHORT</span> highest funding, longs pay you</span>
+    <span>Rates shown as APR. Hover a rate for the hourly figure in bps.</span>
+  </div>
+
+  <div class="tablebox">
+    <table>
+      <thead><tr id="head"></tr></thead>
+      <tbody id="body"></tbody>
+    </table>
+    <div class="empty" id="empty" hidden>No symbol clears the filters yet.</div>
+  </div>
+
+  <p class="note">Break-even days is the round-trip cost divided by the spread earned per day. It ignores price gaps between venues, slippage and margin funding, so treat it as a first screen. Positive funding means longs pay shorts.</p>
+</div>
+
+<script>
+const VENUES = [["sodex","Sodex"],["variational","Variational"],["txflow","TxFlow"],["lighter","Lighter"]];
+const HOURS_PER_YEAR = 8760;
+const state = { data: null, sortKey: "spread", sortDir: -1, active: new Set(VENUES.map(v => v[0])) };
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function fmtApr(h) {
+  const a = h * HOURS_PER_YEAR * 100;
+  const d = Math.abs(a) >= 100 ? 0 : 1;
+  return (a > 0 ? "+" : "") + a.toFixed(d) + "%";
+}
+function fmtBps(h) { return (h * 1e4).toFixed(3) + " bps/h"; }
+
+function buildHead() {
+  const cols = [["sym","Symbol",true],...VENUES.filter(v => state.active.has(v[0])).map(v => [v[0], v[1], false]),
+    ["pair","Trade",true],["spread","Spread APR",false],["be","Break-even",false]];
+  $("head").innerHTML = cols.map(([k,l,txt]) => {
+    const sortable = ["sym","spread","be"].includes(k);
+    const sorted = state.sortKey === k ? ` aria-sort="${state.sortDir > 0 ? "ascending" : "descending"}"` : "";
+    return `<th class="${txt ? "txt" : ""}"${sortable ? ` data-k="${k}" tabindex="0"` : ""}${sorted}>${l}${state.sortKey === k ? (state.sortDir > 0 ? " ▲" : " ▼") : ""}</th>`;
+  }).join("");
+  $("head").querySelectorAll("th[data-k]").forEach(th => {
+    const go = () => { const k = th.dataset.k; state.sortDir = state.sortKey === k ? -state.sortDir : (k === "sym" ? 1 : -1); state.sortKey = k; render(); };
+    th.onclick = go; th.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } };
+  });
+}
+
+function compute() {
+  const minApr = parseFloat($("minApr").value) || 0;
+  const cost = parseFloat($("cost").value) || 0;
+  const q = $("q").value.trim().toUpperCase();
+  const rows = [];
+  for (const s of state.data.symbols) {
+    if (q && !s.sym.includes(q)) continue;
+    const vals = VENUES.filter(([k]) => state.active.has(k) && s[k]).map(([k,l]) => ({ k, l, h: s[k].hourly }));
+    if (vals.length < 2) continue;
+    let lo = vals[0], hi = vals[0];
+    for (const v of vals) { if (v.h < lo.h) lo = v; if (v.h > hi.h) hi = v; }
+    const gap = hi.h - lo.h;
+    const apr = gap * HOURS_PER_YEAR * 100;
+    if (apr < minApr) continue;
+    const perDayBps = gap * 24 * 1e4;
+    rows.push({ s, lo, hi, gap, apr, be: perDayBps > 0 ? cost / perDayBps : Infinity });
+  }
+  const dir = state.sortDir, k = state.sortKey;
+  rows.sort((a, b) => k === "sym" ? dir * a.s.sym.localeCompare(b.s.sym) : k === "be" ? dir * (a.be - b.be) : dir * (a.apr - b.apr));
+  return rows;
+}
+
+function render() {
+  if (!state.data) return;
+  buildHead();
+  const rows = compute();
+  const act = VENUES.filter(v => state.active.has(v[0]));
+  $("body").innerHTML = rows.map(r => {
+    const cells = act.map(([k]) => {
+      const v = r.s[k];
+      if (!v) return `<td class="na">n/a</td>`;
+      const cls = r.lo.k === k ? "l" : r.hi.k === k ? "s" : "";
+      return `<td class="${cls}" title="${fmtBps(v.hourly)} · every ${v.intervalH}h${v.mark ? " · mark " + v.mark : ""}">${fmtApr(v.hourly)}</td>`;
+    }).join("");
+    const be = isFinite(r.be) ? (r.be < 1 ? "<1 day" : r.be.toFixed(1) + " d") : "n/a";
+    return `<tr><td class="sym">${esc(r.s.sym)}</td>${cells}<td class="pair txt"><span class="tag l">LONG</span> ${esc(r.lo.l)} &nbsp;<span class="tag s">SHORT</span> ${esc(r.hi.l)}</td><td class="spread">${r.apr.toFixed(r.apr >= 100 ? 0 : 1)}%</td><td>${be}</td></tr>`;
+  }).join("");
+  $("empty").hidden = rows.length > 0;
+}
+
+function renderChips() {
+  const now = state.data.now;
+  $("chips").innerHTML = VENUES.map(([k,l]) => {
+    const v = state.data.venues[k];
+    const ref = state.data.static ? Date.now() : now;
+    const secs = v.updated ? Math.max(0, Math.round((ref - v.updated) / 1000)) : null;
+    const age = secs === null ? "--" : secs >= 120 ? Math.round(secs / 60) + "m" : secs + "s";
+    const cls = v.ok ? "ok" : "err";
+    const tip = v.error ? ` title="${esc(v.error)}"` : "";
+    return `<div class="chip ${cls}"${tip}><i class="dot"></i><b>${l}</b><span>${v.count} mkts · ${age}${v.ok ? "" : " · " + esc(v.error || "down")}</span></div>`;
+  }).join("");
+}
+
+async function tick() {
+  try {
+    // Live server first; on static hosting (GitHub Pages) fall back to the data.json the scheduled job writes.
+    let res = await fetch("api/funding", { cache: "no-store" }).catch(() => null);
+    if (!res || !res.ok) res = await fetch("data.json?t=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) throw new Error("no data");
+    state.data = await res.json();
+    renderChips();
+    render();
+  } catch (e) {
+    $("chips").innerHTML = `<div class="chip err"><i class="dot"></i><b>Server</b><span>unreachable</span></div>`;
+  }
+}
+
+$("venueBoxes").innerHTML = VENUES.map(([k,l]) => `<label><input type="checkbox" id="v-${k}" checked> ${l}</label>`).join("");
+VENUES.forEach(([k]) => $("v-" + k).addEventListener("change", (e) => { e.target.checked ? state.active.add(k) : state.active.delete(k); render(); }));
+["minApr","cost","q"].forEach(id => $(id).addEventListener("input", render));
+buildHead();
+tick();
+setInterval(tick, 30000);
+</script>
+</body>
+</html>

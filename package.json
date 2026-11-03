@@ -1,0 +1,8 @@
+{
+  "name": "funding-spreads",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cross-venue funding rate spreads for Sodex, Variational, TxFlow and Lighter",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}
